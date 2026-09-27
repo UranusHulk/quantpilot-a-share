@@ -1,11 +1,13 @@
 {
   "name": "quantpilot-a-share-platform",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "description": "A股策略回测与个股研究平台",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build": "node build.mjs"
   },
   "engines": {
     "node": ">=20"

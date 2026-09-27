@@ -1,8 +1,10 @@
-﻿# QuantPilot A股量化研究平台
+# QuantPilot A股量化研究平台
 
 这是一个面向 A 股研究的网页工具，包含股票池、实时行情、策略实验室、历史回测和个股详情。
 
 ## 本地运行
+
+需要 Node.js 20 或更新版本：
 
 ```powershell
 node server.js
@@ -12,15 +14,7 @@ node server.js
 
 ## 公网部署
 
-项目使用 Node.js HTTP 服务，云平台启动命令为：
-
-```text
-node server.js
-```
-
-服务会读取 `PORT` 环境变量，并监听 `0.0.0.0`，可部署到 Render、Railway、Fly.io 等 Node.js 云平台。
-
-详细步骤见 [DEPLOY.md](DEPLOY.md)。
+支持 Cloudflare Pages：静态页面由 Pages 托管，实时行情、股票目录、个股详情和回测 API 由 Pages Functions 运行。GitHub 连接设置为构建命令 `npm run build`、输出目录 `dist`。详细配置见 [DEPLOY.md](DEPLOY.md)。
 
 ## 数据说明
 

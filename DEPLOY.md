@@ -1,29 +1,26 @@
-﻿# QuantPilot 部署说明
+# QuantPilot 公网部署
+
+## Cloudflare Pages 设置
+
+仓库已包含 Pages Functions 和 `wrangler.toml`。在 Cloudflare Dashboard 中：
+
+1. 打开 **Workers & Pages → Create application → Pages → Connect to Git**。
+2. 连接 GitHub 并选择 `UranusHulk/quantpilot-a-share`。
+3. Framework preset 选 **None**，Build command 填 `npm run build`，Build output directory 填 `dist`。
+4. 点击 **Save and Deploy**。
+
+Cloudflare 会通过 GitHub 自动构建和发布后续提交。部署成功后使用它提供的 `https://<项目名>.pages.dev` 地址，并检查首页及 `/health`。Pages 免费套餐通常不需要信用卡。
 
 ## 本机运行
 
+需要 Node.js 20 或更新版本：
+
 ```powershell
-npm start
+node server.js
 ```
 
-打开 `http://127.0.0.1:8080`。
+打开 `http://127.0.0.1:8080`。同一局域网内可通过本机局域网 IP 访问。
 
-## 局域网访问
+## 数据接口
 
-服务已监听 `0.0.0.0`。同一局域网设备可访问：
-
-```text
-http://本机局域网IP:8080
-```
-
-Windows 防火墙需要允许 Node.js 接收 TCP 8080 入站连接。
-
-## 公网访问
-
-`127.0.0.1` 只代表访问者自己的电脑，不能作为面向用户的网站地址。将项目推送到 GitHub 后，在 Render 创建 Web Service，使用：
-
-- Build Command: `npm install`
-- Start Command: `npm start`
-- Health Check Path: `/health`
-
-部署完成后使用 Render 分配的 `https://...onrender.com` 地址。生产环境建议绑定自己的域名，并把行情接口放在服务端调用。
+静态页面由 Cloudflare Pages 托管；行情、股票池和回测 API 由 Pages Functions 在服务端请求腾讯行情、交易所目录和东方财富接口，浏览器使用同源 `/api/*` 路径。公开行情源可用性取决于上游服务对 Cloudflare 网络的响应。
