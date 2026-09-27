@@ -5,8 +5,5 @@ node_modules/
 .DS_Store
 Thumbs.db
 dist/
-
-dist/
-
-# Local reference materials (not part of the web app)
+/量化交易/
 /量化投资策略源码模型多因子短线量化交易策略方法分析电子版模板/
