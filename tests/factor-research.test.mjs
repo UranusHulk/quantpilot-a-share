@@ -66,8 +66,10 @@ test('factor research falls back to segmented Tencent adjusted daily bars when E
     assert.equal(url.hostname, 'web.ifzq.gtimg.cn');
     const [ticker, , start, end] = url.searchParams.get('param').split(',');
     tencentWindows.push([ticker, start, end]);
+    if (ticker === 'sh688775' && end < '2025-06-11') return Response.json({ code: 0, data: { [ticker]: { day: [] } } });
     const bars = [];
-    const cursor = new Date(`${start}T00:00:00Z`);
+    const barStart = ticker === 'sh688775' && start < '2025-06-11' ? '2025-06-11' : start;
+    const cursor = new Date(`${barStart}T00:00:00Z`);
     const finish = new Date(`${end}T00:00:00Z`);
     let index = 0;
     while (cursor <= finish) {
@@ -84,21 +86,30 @@ test('factor research falls back to segmented Tencent adjusted daily bars when E
   };
 
   try {
-    const response = await handleApiRequest(new Request('http://localhost/api/factor-research?codes=600000&factor=momentum20&frequency=monthly&horizon=5&start=2024-01-01&end=2025-12-31'));
+    const response = await handleApiRequest(new Request('http://localhost/api/factor-research?codes=688775&factor=momentum20&frequency=monthly&horizon=5&start=2023-11-01&end=2026-10-31'));
     const report = await response.json();
     assert.equal(response.status, 200, JSON.stringify(report));
     assert.equal(report.universe.loaded, 1);
     assert.match(report.quality.source, /腾讯备用/);
-    assert.match(report.quality.historyChecks['600000'].fallbackReason, /520/);
-    assert.ok(report.quality.historyChecks['600000'].validBars > 500);
-    assert.equal(tencentWindows.length, 2);
+    assert.match(report.quality.historyChecks['688775'].fallbackReason, /520/);
+    assert.equal(report.quality.historyChecks['688775'].firstDate, '2025-06-11');
+    assert.ok(report.quality.historyChecks['688775'].validBars > 200);
+    assert.equal(report.quality.historyChecks['688775'].emptyWindows.length, 1);
+    assert.match(report.quality.limitations.join('；'), /688775 2025-06-11/);
+    assert.equal(tencentWindows.length, 3);
     assert.equal(tencentWindows[0][2], tencentWindows[1][1]);
+    assert.equal(tencentWindows[1][2], tencentWindows[2][1]);
 
     const portfolioResponse = await handleApiRequest(new Request('http://localhost/api/backtest?codes=600000,000001&start=2025-01-01&end=2025-12-31&fast=10&slow=30'));
     const portfolio = await portfolioResponse.json();
     assert.equal(portfolioResponse.status, 200, JSON.stringify(portfolio));
     assert.match(portfolio.source, /腾讯前复权备用/);
     assert.match(portfolio.source, /等资金分仓组合/);
+
+    const preListingResponse = await handleApiRequest(new Request('http://localhost/api/factor-research?codes=688775&start=2022-01-01&end=2024-01-01'));
+    const preListing = await preListingResponse.json();
+    assert.equal(preListingResponse.status, 502);
+    assert.match(preListing.error, /可能早于上市日期/);
   } finally {
     globalThis.fetch = originalFetch;
   }
