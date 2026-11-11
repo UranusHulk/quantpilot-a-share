@@ -74,11 +74,25 @@ test('signals return explainable multi-dimensional scores from real quote and da
     assert.equal(payload.scoreMethod.total, 100);
     assert.deepEqual(payload.scoreMethod.dimensions, { trend: 25, momentum: 20, volume: 15, riskControl: 20, liquidity: 10, dataQuality: 10 });
     const item = payload.items[0];
-    assert.equal(item.dataPoints, 1000);
+    assert.ok(item.dataPoints >= 450 && item.dataPoints <= 550, `expected one and a half years of daily bars, got ${item.dataPoints}`);
     assert.deepEqual(Object.keys(item.scoreBreakdown), ['trend', 'momentum', 'volume', 'riskControl', 'liquidity', 'dataQuality']);
     assert.equal(item.score, Object.values(item.scoreBreakdown).reduce((sum, value) => sum + value, 0));
     assert.match(item.reason, /SMA|动量|成交量/);
     assert.ok(item.riskReason);
+
+    globalThis.fetch = async input => {
+      const url = new URL(input);
+      if (url.hostname === 'qt.gtimg.cn') return new Response(`v_sz000001="${fields.join('~')}"`);
+      if (url.hostname === 'web.ifzq.gtimg.cn') return Response.json({ code: 0, data: { sz000001: { day: [] } } });
+      if (url.hostname === 'money.finance.sina.com.cn') return Response.json([]);
+      throw new Error(`unexpected provider ${url.hostname}`);
+    };
+    const insufficientResponse = await handleApiRequest(new Request('http://localhost/api/signals?codes=000001'));
+    const insufficient = await insufficientResponse.json();
+    assert.equal(insufficientResponse.status, 200);
+    assert.equal(insufficient.items[0].signal, '观察');
+    assert.equal(insufficient.items[0].scoreBreakdown.dataQuality, 0);
+    assert.match(insufficient.items[0].dataSource, /不可用/);
   } finally {
     globalThis.fetch = originalFetch;
   }
