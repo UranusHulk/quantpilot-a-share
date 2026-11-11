@@ -57,6 +57,33 @@ test('invalid stock codes are rejected instead of silently using the default uni
   assert.match((await response.json()).error, /六位数字/);
 });
 
+test('signals return explainable multi-dimensional scores from real quote and daily bars', async () => {
+  const originalFetch = globalThis.fetch;
+  const fields = Array.from({ length: 60 }, () => ''); fields[1] = '测试股份'; fields[3] = '20'; fields[4] = '19.5'; fields[30] = '20261111150000'; fields[32] = '2.56'; fields[38] = '3.2'; fields[57] = '25000';
+  const bars = Array.from({ length: 1000 }, (_, index) => { const date = new Date(Date.UTC(2024, 0, 2 + index)); const close = 10 + index * 0.03; return [date.toISOString().slice(0, 10), close.toFixed(3), close.toFixed(3), (close * 1.01).toFixed(3), (close * 0.99).toFixed(3), String(100000 + index * 1000)]; });
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.hostname === 'qt.gtimg.cn') return new Response(`v_sz000001="${fields.join('~')}"`);
+    if (url.hostname === 'web.ifzq.gtimg.cn') return Response.json({ code: 0, data: { sz000001: { day: bars } } });
+    throw new Error(`unexpected provider ${url.hostname}`);
+  };
+  try {
+    const response = await handleApiRequest(new Request('http://localhost/api/signals?codes=000001'));
+    const payload = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(payload));
+    assert.equal(payload.scoreMethod.total, 100);
+    assert.deepEqual(payload.scoreMethod.dimensions, { trend: 25, momentum: 20, volume: 15, riskControl: 20, liquidity: 10, dataQuality: 10 });
+    const item = payload.items[0];
+    assert.equal(item.dataPoints, 1000);
+    assert.deepEqual(Object.keys(item.scoreBreakdown), ['trend', 'momentum', 'volume', 'riskControl', 'liquidity', 'dataQuality']);
+    assert.equal(item.score, Object.values(item.scoreBreakdown).reduce((sum, value) => sum + value, 0));
+    assert.match(item.reason, /SMA|动量|成交量/);
+    assert.ok(item.riskReason);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('data source status endpoint probes actual response shapes from the current server environment', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async input => {
