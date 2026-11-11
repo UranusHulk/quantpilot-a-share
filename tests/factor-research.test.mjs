@@ -56,3 +56,50 @@ test('invalid stock codes are rejected instead of silently using the default uni
   assert.equal(response.status, 400);
   assert.match((await response.json()).error, /六位数字/);
 });
+
+test('factor research falls back to segmented Tencent adjusted daily bars when Eastmoney fails', async () => {
+  const originalFetch = globalThis.fetch;
+  const tencentWindows = [];
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.hostname === 'push2his.eastmoney.com') return new Response('upstream unavailable', { status: 520 });
+    assert.equal(url.hostname, 'web.ifzq.gtimg.cn');
+    const [ticker, , start, end] = url.searchParams.get('param').split(',');
+    tencentWindows.push([ticker, start, end]);
+    const bars = [];
+    const cursor = new Date(`${start}T00:00:00Z`);
+    const finish = new Date(`${end}T00:00:00Z`);
+    let index = 0;
+    while (cursor <= finish) {
+      const day = cursor.getUTCDay();
+      if (day !== 0 && day !== 6) {
+        const date = cursor.toISOString().slice(0, 10);
+        const close = 10 + index * 0.01 + Math.sin(index / 11) * 0.2;
+        bars.push([date, close.toFixed(3), close.toFixed(3), (close * 1.01).toFixed(3), (close * 0.99).toFixed(3), String(100000 + index)]);
+        index += 1;
+      }
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return Response.json({ code: 0, data: { [ticker]: { qfqday: bars } } });
+  };
+
+  try {
+    const response = await handleApiRequest(new Request('http://localhost/api/factor-research?codes=600000&factor=momentum20&frequency=monthly&horizon=5&start=2024-01-01&end=2025-12-31'));
+    const report = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(report));
+    assert.equal(report.universe.loaded, 1);
+    assert.match(report.quality.source, /腾讯备用/);
+    assert.match(report.quality.historyChecks['600000'].fallbackReason, /520/);
+    assert.ok(report.quality.historyChecks['600000'].validBars > 500);
+    assert.equal(tencentWindows.length, 2);
+    assert.equal(tencentWindows[0][2], tencentWindows[1][1]);
+
+    const portfolioResponse = await handleApiRequest(new Request('http://localhost/api/backtest?codes=600000,000001&start=2025-01-01&end=2025-12-31&fast=10&slow=30'));
+    const portfolio = await portfolioResponse.json();
+    assert.equal(portfolioResponse.status, 200, JSON.stringify(portfolio));
+    assert.match(portfolio.source, /腾讯前复权备用/);
+    assert.match(portfolio.source, /等资金分仓组合/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
